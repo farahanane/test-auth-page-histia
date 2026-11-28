@@ -1,6 +1,6 @@
 # Auth feature — implementation plan
 
-Status: **v3 approved — step 0 done** (tooling only, no feature code). Findings in §7.
+Status: **v3 approved — steps 0 and 1 done**. Findings and notes in §7.
 
 Sources read: `Cas pratique.pdf`, `README.md`, `claude.md`, `AGENTS.md`, `package.json`, `bun.lock`, every file under `src/`, `prisma/schema.prisma`, `prisma/seed.ts`, configs, Figma exports (10 screens + overview, incl. email template and company card component).
 To read at step 0: `node_modules/next/dist/docs/` (required by AGENTS.md; deps not installed yet).
@@ -267,6 +267,16 @@ Facts verified in the installed sources; they refine decisions without changing 
 | F9 | Bun blocked install scripts for `prisma`, `@prisma/engines`, `esbuild`, `@parcel/watcher`; everything works without them (prebuilt binaries). | `bun pm untrusted` | Not trusted — nothing to do. |
 
 Step 0 tooling: `intlayer.config.ts`, `next.config.ts` (`withIntlayer`), `vitest.config.mts` + `vitest.setup.ts`, `playwright.config.ts` (single 1920×1080 project, serial, because flows share server rate limits; responsive spec sets both viewports itself), scripts `typecheck` / `test` / `test:watch` / `test:e2e`, `.gitignore` + ESLint ignores for `.intlayer/`, Playwright output. `@testing-library/dom` added (required peer of `@testing-library/react`).
+
+### Step 1 notes (done)
+
+Pure modules in `src/features/auth/lib/` (each with its test file): `auth-error`, `two-factor-methods`, `code-distribution`, `cooldown-store`, `schemas`, `name-from-email`. Decisions taken while implementing (all **TECH**):
+
+- **Fallback also on `tooManyCodeAttempts`** (CLAR-6 implementation detail): after 5 wrong tries the email code is dead, but the user may be typing app codes; stopping there would block a valid app code. Verifier order stays `otp → totp`.
+- **Recovery code** accepted with or without the dash, trimmed; the dash is re-inserted before sending (server compares `xxxxx-xxxxx` exactly, case-sensitive).
+- **Password rules** 8–128 = Better-Auth defaults (README states the minimum). Sign-in only checks "not empty".
+- **Cooldown duration is not duplicated** on the client: `start(action, seconds)` takes it as an argument; the value will come from `RESEND_COOLDOWN_SECONDS` (server, read-only import) through a server component, or from `X-Retry-After`. Stored deadlines are capped at 1 h and fall back to memory if storage is blocked.
+- Mutation check: deliberately breaking the paste logic made 5 tests fail; a `when` option I had added to the Zod refine turned out to change nothing (Zod 4 already skips the match check after a "required" failure) — removed as unnecessary complexity, behaviour pinned by tests.
 
 ---
 
