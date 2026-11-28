@@ -1,6 +1,6 @@
 # Auth feature — implementation plan
 
-Status: **v3 approved — steps 0 and 1 done**. Findings and notes in §7.
+Status: **v3 approved — steps 0 to 2 done**. Findings and notes in §7.
 
 Sources read: `Cas pratique.pdf`, `README.md`, `claude.md`, `AGENTS.md`, `package.json`, `bun.lock`, every file under `src/`, `prisma/schema.prisma`, `prisma/seed.ts`, configs, Figma exports (10 screens + overview, incl. email template and company card component).
 To read at step 0: `node_modules/next/dist/docs/` (required by AGENTS.md; deps not installed yet).
@@ -277,6 +277,16 @@ Pure modules in `src/features/auth/lib/` (each with its test file): `auth-error`
 - **Password rules** 8–128 = Better-Auth defaults (README states the minimum). Sign-in only checks "not empty".
 - **Cooldown duration is not duplicated** on the client: `start(action, seconds)` takes it as an argument; the value will come from `RESEND_COOLDOWN_SECONDS` (server, read-only import) through a server component, or from `X-Retry-After`. Stored deadlines are capped at 1 h and fall back to memory if storage is blocked.
 - Mutation check: deliberately breaking the paste logic made 5 tests fail; a `when` option I had added to the Zod refine turned out to change nothing (Zod 4 already skips the match check after a "required" failure) — removed as unnecessary complexity, behaviour pinned by tests.
+
+### Step 2 notes (done)
+
+`src/features/auth/components/`: `TextField`, `CodeInput`, `ResendButton`; `hooks/use-cooldown.ts`; `lib/browser-cooldown-store.ts` (one store per page). All texts come in as props (translated by callers), like the provided `PasswordInput`. Decisions (**TECH**):
+
+- **`TextField`** repeats `PasswordInput`'s classes instead of sharing them: `PasswordInput` is provided code I don't modify.
+- **`CodeInput`** keeps its digits internally; the parent clears it by remounting with a new `key` (e.g. after `INVALID_CODE`). `onComplete` fires from the event handler (not an effect) each time the boxes hold a *new* complete code, so correcting one digit re-submits. Content is selected on focus so typing replaces the digit. `autoComplete="one-time-code"` on the first box for OS autofill.
+- **`useCooldown`** = `useSyncExternalStore` + 1 s tick; server snapshot is `0`, the real value appears after hydration. Re-renders only when the number of seconds changes.
+- **`ResendButton`** only displays and disables; the caller starts the cooldown from the server's answer (success → 30 s, 429 → `X-Retry-After`).
+- Test tooling: Vitest 5 fakes `setTimeout` by default, which hangs Testing Library's async wrapper; countdown tests fake only `Date`, `setInterval`, `clearInterval`.
 
 ---
 
