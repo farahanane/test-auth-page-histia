@@ -1,6 +1,6 @@
 # Auth feature — implementation plan
 
-Status: **v3 approved — steps 0 to 2 done**. Findings and notes in §7.
+Status: **v3 approved — steps 0 to 3 done**. Findings and notes in §7.
 
 Sources read: `Cas pratique.pdf`, `README.md`, `claude.md`, `AGENTS.md`, `package.json`, `bun.lock`, every file under `src/`, `prisma/schema.prisma`, `prisma/seed.ts`, configs, Figma exports (10 screens + overview, incl. email template and company card component).
 To read at step 0: `node_modules/next/dist/docs/` (required by AGENTS.md; deps not installed yet).
@@ -287,6 +287,18 @@ Pure modules in `src/features/auth/lib/` (each with its test file): `auth-error`
 - **`useCooldown`** = `useSyncExternalStore` + 1 s tick; server snapshot is `0`, the real value appears after hydration. Re-renders only when the number of seconds changes.
 - **`ResendButton`** only displays and disables; the caller starts the cooldown from the server's answer (success → 30 s, 429 → `X-Retry-After`).
 - Test tooling: Vitest 5 fakes `setTimeout` by default, which hangs Testing Library's async wrapper; countdown tests fake only `Date`, `setInterval`, `clearInterval`.
+
+### Step 3 notes (done)
+
+Routing and layout: `src/proxy.ts` (Intlayer), root layouts `app/[locale]/layout.tsx` and `app/code/layout.tsx` sharing `components/layout/app-document.tsx`; **deleted** `app/layout.tsx` and `app/page.tsx` (F5); `app/[locale]/page.tsx` → login; `app/[locale]/(auth)/layout.tsx` with `AuthShell` (glows, logo, centred slot) and `AuthCard` (glass card, region named by its title); translated 404; `QueryProvider`. Decisions (**TECH**):
+
+- **Locale in server components = `next/root-params`** via `getAppLocale()` + `getIntlayer(key, locale)`. `useIntlayer` without a locale read the request headers (pages don't share the layout's server context in Next 16) and broke prerendering; with root params `/fr/login` and `/en/login` are **static**.
+- **404**: catch-all `app/[locale]/[...rest]` → `notFound()` + `app/[locale]/not-found.tsx` (translated, real 404 status), instead of the experimental `global-not-found`. Unknown locales (`/de/login`) are redirected by the proxy under a valid locale and end there too.
+- **Proxy matcher** excludes exactly `/api`, `/code`, `/email` (with or without sub-path), `_next`, files.
+- **Default locale** (ASSUME-1) confirmed end to end: cookie → `Accept-Language` → `fr`. An English browser gets `/en/login`, any other `/fr/login`.
+- **Logo** = vector placeholder (`components/brand/stolos-logo.tsx`, ASSUME-9) until the export arrives.
+- `tsconfig.json` includes `.intlayer/**/*.ts` (generated locale types); TanStack mutations never retry (a retry would burn a code attempt or hit the rate limit).
+- Tests: 116 unit (incl. locale helper in a Node environment, shell/card a11y), 10 Playwright (routing, 404, `/code` and `/api` untouched). A "regression" on `/code` was only the stopped Postgres container (`ECONNREFUSED`) — `bun run db:up` is needed after a reboot.
 
 ---
 
